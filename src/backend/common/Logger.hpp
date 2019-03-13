@@ -12,9 +12,8 @@
 #include <memory>
 #include <string>
 
-namespace spdlog {
-class logger;
-}
+#include <spdlog/spdlog.h>
+
 namespace common {
 std::shared_ptr<spdlog::logger> loggerFactory(std::string name);
 std::string bytesToString(size_t bytes);

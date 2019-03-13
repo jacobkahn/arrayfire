@@ -17,8 +17,6 @@
 #include <spdlog/spdlog.h>
 #include <types.hpp>
 
-template class common::MemoryManager<cpu::MemoryManager>;
-
 #ifndef AF_MEM_DEBUG
 #define AF_MEM_DEBUG 0
 #endif
@@ -117,9 +115,9 @@ INSTANTIATE(ushort)
 INSTANTIATE(short)
 
 MemoryManager::MemoryManager()
-    : common::MemoryManager<cpu::MemoryManager>(
-          getDeviceCount(), common::MAX_BUFFERS,
-          AF_MEM_DEBUG || AF_CPU_MEM_DEBUG) {
+    : common::MemoryManager(getDeviceCount(), common::MAX_BUFFERS,
+                                                AF_MEM_DEBUG || AF_CPU_MEM_DEBUG)
+{
     this->setMaxMemorySize();
 }
 
@@ -132,6 +130,14 @@ MemoryManager::~MemoryManager() {
             continue;  // Do not throw any errors while shutting down
         }
     }
+}
+
+common::memory::memory_info& MemoryManager::getCurrentMemoryInfo() {
+    return memory[this->getActiveDeviceId()];
+}
+
+void MemoryManager::garbageCollect() {
+    cleanDeviceMemoryManager(this->getActiveDeviceId());
 }
 
 int MemoryManager::getActiveDeviceId() { return cpu::getActiveDeviceId(); }
