@@ -17,14 +17,6 @@
 #include <spdlog/spdlog.h>
 #include <types.hpp>
 
-#ifndef AF_MEM_DEBUG
-#define AF_MEM_DEBUG 0
-#endif
-
-#ifndef AF_CPU_MEM_DEBUG
-#define AF_CPU_MEM_DEBUG 0
-#endif
-
 using common::bytesToString;
 
 using std::function;
@@ -43,7 +35,13 @@ unsigned getMaxBuffers() { return memoryManager().getMaxBuffers(); }
 
 void garbageCollect() { memoryManager().garbageCollect(); }
 
-void printMemInfo(const char *msg, const int device) {
+void shutdownMemoryManager()
+{
+    memoryManager().shutdown();
+}
+
+void printMemInfo(const char *msg, const int device)
+{
     memoryManager().printInfo(msg, device);
 }
 
@@ -114,33 +112,25 @@ INSTANTIATE(uintl)
 INSTANTIATE(ushort)
 INSTANTIATE(short)
 
-MemoryManager::MemoryManager()
-    : common::MemoryManager(getDeviceCount(), common::MAX_BUFFERS,
-                                                AF_MEM_DEBUG || AF_CPU_MEM_DEBUG)
-{
-    this->setMaxMemorySize();
+MemoryManager::MemoryManager() {
+  logger = common::loggerFactory("mem");
 }
 
 MemoryManager::~MemoryManager() {
     for (int n = 0; n < cpu::getDeviceCount(); n++) {
         try {
             cpu::setDevice(n);
-            garbageCollect();
-        } catch (AfError err) {
-            continue;  // Do not throw any errors while shutting down
+            shutdownMemoryManager();
+        } catch(AfError err) {
+            continue; // Do not throw any errors while shutting down
         }
     }
 }
 
-common::memory::memory_info& MemoryManager::getCurrentMemoryInfo() {
-    return memory[this->getActiveDeviceId()];
+int MemoryManager::getActiveDeviceId()
+{
+    return cpu::getActiveDeviceId();
 }
-
-void MemoryManager::garbageCollect() {
-    cleanDeviceMemoryManager(this->getActiveDeviceId());
-}
-
-int MemoryManager::getActiveDeviceId() { return cpu::getActiveDeviceId(); }
 
 size_t MemoryManager::getMaxMemorySize(int id) {
     return cpu::getDeviceMemorySize(id);

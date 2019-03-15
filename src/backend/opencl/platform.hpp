@@ -103,9 +103,13 @@ bool& evalFlag();
 
 ///////////////////////// BEGIN Sub-Managers ///////////////////
 //
-MemoryManager& memoryManager();
+af::MemoryManagerBase& memoryManager();
 
-MemoryManagerPinned& pinnedMemoryManager();
+af::MemoryManagerBase& pinnedMemoryManager();
+
+void setMemoryManagerDevice(std::unique_ptr<af::MemoryManagerBase> ptr);
+
+void setPinnedMemoryManagerDevice(std::unique_ptr<af::MemoryManagerBase> ptr);
 
 graphics::ForgeManager& forgeManager();
 
@@ -122,10 +126,19 @@ kc_entry_t kernelCache(int device, const std::string& key);
 //
 ///////////////////////// END Sub-Managers /////////////////////
 
-class DeviceManager {
-    friend MemoryManager& memoryManager();
+class DeviceManager
+{
+    friend af::MemoryManagerBase& memoryManager();
 
-    friend MemoryManagerPinned& pinnedMemoryManager();
+    friend af::MemoryManagerBase& pinnedMemoryManager();
+
+    friend void setMemoryManagerDevice(
+        std::unique_ptr<af::MemoryManagerBase> ptr
+    );
+
+    friend void setPinnedMemoryManagerDevice(
+        std::unique_ptr<af::MemoryManagerBase> ptr
+    );
 
     friend graphics::ForgeManager& forgeManager();
 
@@ -204,8 +217,8 @@ class DeviceManager {
     unsigned mUserDeviceOffset;
 
     std::unique_ptr<graphics::ForgeManager> fgMngr;
-    std::unique_ptr<MemoryManager> memManager;
-    std::unique_ptr<MemoryManagerPinned> pinnedMemManager;
+    std::unique_ptr<af::MemoryMangaerBase> memManager;
+    std::unique_ptr<af::MemoryManagerBase> pinnedMemManager;
     std::unique_ptr<GraphicsResourceManager> gfxManagers[MAX_DEVICES];
     std::unique_ptr<clfftSetupData> mFFTSetup;
 

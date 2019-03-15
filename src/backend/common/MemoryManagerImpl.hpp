@@ -76,6 +76,14 @@ MemoryManager::MemoryManager(int num_devices,
     if (!env_var.empty()) this->max_buffers = max(1, stoi(env_var));
 }
 
+void MemoryManager::initialize() {
+  this->setMaxMemorySize();
+}
+
+void MemoryManager::shutdown() {
+  garbageCollect();
+}
+
 
 void MemoryManager::addMemoryManagement(int device) {
     // If there is a memory manager allocated for this device id, we might
@@ -98,6 +106,10 @@ void MemoryManager::removeMemoryManagement(int device) {
 }
 
 
+void MemoryManager::garbageCollect() {
+    cleanDeviceMemoryManager(this->getActiveDeviceId());
+}
+
 void MemoryManager::setMaxMemorySize() {
     for (unsigned n = 0; n < memory.size(); n++) {
         // Calls garbage collection when: total_bytes > memsize * 0.75 when
@@ -108,6 +120,10 @@ void MemoryManager::setMaxMemorySize() {
             memsize == 0 ? ONE_GB
                          : max(memsize * 0.75, (double)(memsize - ONE_GB));
     }
+}
+
+common::memory::memory_info& MemoryManager::getCurrentMemoryInfo() {
+    return memory[this->getActiveDeviceId()];
 }
 
 void *MemoryManager::alloc(const size_t bytes, bool user_lock) {
@@ -327,11 +343,6 @@ size_t MemoryManager::getMaxBytes() {
 unsigned MemoryManager::getMaxBuffers() {
     return this->max_buffers;
 }
-
-logger* MemoryManager::getLogger() {
-    return this->logger.get();
-}
-
 
 void MemoryManager::setMemStepSize(size_t new_step_size) {
     lock_guard_t lock(this->memory_mutex);

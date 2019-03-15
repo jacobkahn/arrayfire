@@ -18,6 +18,7 @@
 #include <af/dim4.hpp>
 #include <af/version.h>
 #include <cstring>
+#include <memory>
 
 using namespace detail;
 
@@ -209,6 +210,50 @@ af_err af_unlock_array(const af_array arr) {
     }
     CATCHALL;
 
+    return AF_SUCCESS;
+}
+
+af_err af_set_memory_manager(af_memory_manager *manager,
+                             af_memory_manager_api_type api) {
+    try {
+        std::unique_ptr<af::MemoryManagerBase> m;
+        // C vs. C++ API
+        if (api == AF_CPP_MEMORY_MANAGER_API) {
+            af::MemoryManagerBase* p =
+              static_cast<af::MemoryManagerBase*>(manager);
+            // C++-API
+            m.reset(p);
+        } else if (api == AF_C_MEMORY_MANAGER_API) {
+            // C-API: construct a MemoryManagerCWrapper out of the given C struct
+            m.reset(new common::MemoryManagerCWrapper(manager));
+        } else {
+            // FIXME: throw an error here
+            // throw AfError("Invalid", AF_ERR_INTERNAL)
+        }
+        setMemoryManagerDevice(std::move(m));
+    } CATCHALL;
+    return AF_SUCCESS;
+}
+
+af_err af_set_pinned_memory_manager(af_memory_manager *manager,
+                                    af_memory_manager_api_type api) {
+    try {
+        std::unique_ptr<af::MemoryManagerBase> m;
+        // C vs. C++ API
+        if (api == AF_CPP_MEMORY_MANAGER_API) {
+            af::MemoryManagerBase* p =
+              static_cast<af::MemoryManagerBase*>(manager);
+            // C++-API
+            m.reset(p);
+        } else if (api == AF_C_MEMORY_MANAGER_API) {
+            // C-API: construct a MemoryManagerCWrapper out of the given C struct
+            m.reset(new common::MemoryManagerCWrapper(manager));
+        } else {
+            // FIXME: throw an error here
+            // throw AfError("Invalid", AF_ERR_INTERNAL)
+        }
+        setPinnedMemoryManagerDevice(std::move(m));
+    } CATCHALL;
     return AF_SUCCESS;
 }
 

@@ -10,6 +10,7 @@
 #include <af/array.h>
 #include <af/backend.h>
 #include <af/device.h>
+#include <af/memory.h>
 #include "symbol_manager.hpp"
 
 af_err af_set_backend(const af_backend bknd) {
@@ -66,6 +67,16 @@ af_err af_set_device(const int device) { return CALL(device); }
 af_err af_get_device(int *device) { return CALL(device); }
 
 af_err af_sync(const int device) { return CALL(device); }
+
+af_err af_set_memory_manager(af_memory_manager* manager,
+                             af_memory_manager_api_type api) {
+  return CALL(manager, api);
+}
+
+af_err af_set_pinned_memory_manager(af_memory_manager* manager,
+                                    af_memory_manager_api_type api) {
+  return CALL(manager, api);
+}
 
 af_err af_alloc_device(void **ptr, const dim_t bytes) {
     return CALL(ptr, bytes);

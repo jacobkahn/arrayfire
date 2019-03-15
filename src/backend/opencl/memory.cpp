@@ -17,14 +17,6 @@
 
 #include <common/MemoryManagerImpl.hpp>
 
-#ifndef AF_MEM_DEBUG
-#define AF_MEM_DEBUG 0
-#endif
-
-#ifndef AF_OPENCL_MEM_DEBUG
-#define AF_OPENCL_MEM_DEBUG 0
-#endif
-
 using common::bytesToString;
 
 using std::function;
@@ -43,7 +35,13 @@ unsigned getMaxBuffers() { return memoryManager().getMaxBuffers(); }
 
 void garbageCollect() { memoryManager().garbageCollect(); }
 
-void printMemInfo(const char *msg, const int device) {
+void shutdownMemoryManager()
+{
+    memoryManager().shutdown();
+}
+
+void printMemInfo(const char *msg, const int device)
+{
     memoryManager().printInfo(msg, device);
 }
 
@@ -120,29 +118,25 @@ INSTANTIATE(uintl)
 INSTANTIATE(short)
 INSTANTIATE(ushort)
 
-MemoryManager::MemoryManager()
-    : common::MemoryManager(getDeviceCount(), common::MAX_BUFFERS,
-                                                   AF_MEM_DEBUG || AF_OPENCL_MEM_DEBUG)
-{
-    this->setMaxMemorySize();
+MemoryManager::MemoryManager() {
+    logger = common::loggerFactory("mem");
 }
 
 MemoryManager::~MemoryManager() {
     for (int n = 0; n < opencl::getDeviceCount(); n++) {
         try {
             opencl::setDevice(n);
-            this->garbageCollect();
-        } catch (AfError err) {
-            continue;  // Do not throw any errors while shutting down
+            shutdownMemoryManager();
+        } catch(AfError err) {
+            continue; // Do not throw any errors while shutting down
         }
     }
 }
 
-common::memory::memory_info& MemoryManager::getCurrentMemoryInfo() {
-    return memory[this->getActiveDeviceId()];
+int MemoryManager::getActiveDeviceId()
+{
+    return opencl::getActiveDeviceId();
 }
-
-int MemoryManager::getActiveDeviceId() { return opencl::getActiveDeviceId(); }
 
 size_t MemoryManager::getMaxMemorySize(int id) {
     return opencl::getDeviceMemorySize(id);
@@ -160,17 +154,15 @@ void MemoryManager::nativeFree(void *ptr) {
 }
 
 MemoryManagerPinned::MemoryManagerPinned()
-    : common::MemoryManager(getDeviceCount(), common::MAX_BUFFERS,
-                            AF_MEM_DEBUG || AF_OPENCL_MEM_DEBUG),
-    pinnedMaps(getDeviceCount())
+    : pinnedMaps(getDeviceCount())
 {
-    this->setMaxMemorySize();
+    logger = common::loggerFactory("mem");
 }
 
 MemoryManagerPinned::~MemoryManagerPinned() {
     for (int n = 0; n < opencl::getDeviceCount(); n++) {
         opencl::setDevice(n);
-        this->garbageCollect();
+        shutdownMemoryManager();
         auto currIterator = pinnedMaps[n].begin();
         auto endIterator  = pinnedMaps[n].end();
         while (currIterator != endIterator) {

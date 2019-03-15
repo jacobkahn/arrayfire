@@ -665,25 +665,76 @@ bool& evalFlag() {
     return flag;
 }
 
-MemoryManager& memoryManager() {
+af::MemoryManagerBase& memoryManager()
+{
     static std::once_flag flag;
 
     DeviceManager& inst = DeviceManager::getInstance();
 
-    std::call_once(flag, [&] { inst.memManager.reset(new MemoryManager()); });
+    std::call_once(flag, [&]{
+        // By default, create an instance of the default memory manager
+        inst.memManager.reset(new common::MemoryManager(
+                              getDeviceCount(),
+                              common::MAX_BUFFERS,
+                              AF_MEM_DEBUG || AF_OPENCL_MEM_DEBUG));
+        // Set the memory manager's device memory manager
+        std::unique_ptr<opencl::MemoryManager> deviceMemoryManager;
+        deviceMemoryManager.reset(new opencl::MemoryManager());
+        inst.memManager->setBackendManager(std::move(deviceMemoryManager));
+        inst.memManager->initialize();
+      });
 
     return *(inst.memManager.get());
 }
 
-MemoryManagerPinned& pinnedMemoryManager() {
+af::MemoryManagerBase& pinnedMemoryManager()
+{
     static std::once_flag flag;
 
     DeviceManager& inst = DeviceManager::getInstance();
 
-    std::call_once(
-        flag, [&] { inst.pinnedMemManager.reset(new MemoryManagerPinned()); });
+    std::call_once(flag, [&]{
+                // By default, create an instance of the default memory manager
+        inst.pinnedMemManager.reset(new common::MemoryManager(
+                              getDeviceCount(),
+                              common::MAX_BUFFERS,
+                              AF_MEM_DEBUG || AF_OPENCL_MEM_DEBUG));
+        // Set the memory manager's device memory manager
+        std::unique_ptr<opencl::MemoryManager> deviceMemoryManager;
+        deviceMemoryManager.reset(new opencl::MemoryManager());
+        inst.pinnedMemManager->setBackendManager(std::move(deviceMemoryManager));
+        inst.pinnedMemManager->initialize();
+      });
 
     return *(inst.pinnedMemManager.get());
+}
+
+void setMemoryManagerDevice(std::unique_ptr<af::MemoryManagerBase> ptr) {
+    // Get the current memory manager to fix the edge case in which we haven't
+    // created the default memory manager which will cause deadlock.
+    memoryManager();
+
+    DeviceManager& inst = DeviceManager::getInstance();
+    inst.memManager = std::move(ptr);
+    // Set the memory manager's device memory manager
+    std::unique_ptr<opencl::MemoryManager> deviceMemoryManager;
+    deviceMemoryManager.reset(new opencl::MemoryManager());
+    inst.memManager->setBackendManager(std::move(deviceMemoryManager));
+    inst.memManager->initialize();
+}
+
+void setPinnedMemoryManagerDevice(std::unique_ptr<af::MemoryManagerBase> ptr) {
+    // Get the current memory manager to fix the edge case in which we haven't
+    // created the default memory manager which will cause deadlock.
+    memoryManager();
+
+    DeviceManager& inst = DeviceManager::getInstance();
+    inst.pinnedMemManager = std::move(ptr);
+    // Set the memory manager's device memory manager
+    std::unique_ptr<opencl::MemoryManagerPinned> deviceMemoryManager;
+    deviceMemoryManager.reset(new opencl::MemoryManagerPinned());
+    inst.pinnedMemManager->setBackendManager(std::move(deviceMemoryManager));
+    inst.pinnedMemManager->initialize();
 }
 
 graphics::ForgeManager& forgeManager() {

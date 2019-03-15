@@ -246,14 +246,46 @@ bool& evalFlag() {
 }
 
 DeviceManager::DeviceManager()
-    : queues(MAX_QUEUES)
-    , memManager(new MemoryManager())
-    , fgMngr(new graphics::ForgeManager())
-    {}
+  : queues(MAX_QUEUES),
+    // By default, create an instance of the default memory manager
+    memManager(new common::MemoryManager(getDeviceCount(), common::MAX_BUFFERS,
+                                         AF_MEM_DEBUG || AF_CPU_MEM_DEBUG)),
+    fgMngr(new graphics::ForgeManager())
+{
+  // Set the memory manager's device memory manager
+  std::unique_ptr<cpu::MemoryManager> deviceMemoryManager;
+  deviceMemoryManager.reset(new cpu::MemoryManager());
+  memManager->setBackendManager(std::move(deviceMemoryManager));
+  memManager->initialize();
 
-MemoryManager& memoryManager() {
+}
+
+af::MemoryManagerBase& memoryManager()
+{
     DeviceManager& inst = DeviceManager::getInstance();
     return *(inst.memManager);
+}
+
+void setMemoryManagerDevice(std::unique_ptr<af::MemoryManagerBase> ptr)
+{
+  // Get the current memory manager to fix the edge case in which we haven't
+  // created the default memory manager which will cause deadlock.
+  memoryManager();
+
+  DeviceManager& inst = DeviceManager::getInstance();
+  inst.memManager = std::move(ptr);
+  // Set the memory manager's device memory manager
+  std::unique_ptr<cpu::MemoryManager> deviceMemoryManager;
+  deviceMemoryManager.reset(new cpu::MemoryManager());
+  inst.memManager->setBackendManager(std::move(deviceMemoryManager));
+  inst.memManager->initialize();
+}
+
+// Since the CPU backend doesn't implement a pinned memory manager,
+// set the main memory manager.
+void setPinnedMemoryManagerDevice(std::unique_ptr<af::MemoryManagerBase> ptr)
+{
+  setMemoryManagerDevice(std::move(ptr));
 }
 
 graphics::ForgeManager& forgeManager() {

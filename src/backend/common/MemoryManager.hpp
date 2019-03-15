@@ -12,6 +12,7 @@
 #include <common/dispatch.hpp>
 #include <common/err_common.hpp>
 #include <common/util.hpp>
+#include <af/memory.h>
 
 #include <algorithm>
 #include <functional>
@@ -21,6 +22,22 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#ifndef AF_MEM_DEBUG
+#define AF_MEM_DEBUG 0
+#endif
+
+#ifndef AF_CPU_MEM_DEBUG
+#define AF_CPU_MEM_DEBUG 0
+#endif
+
+#ifndef AF_CUDA_MEM_DEBUG
+#define AF_CUDA_MEM_DEBUG 0
+#endif
+
+#ifndef AF_OPENCL_MEM_DEBUG
+#define AF_OPENCL_MEM_DEBUG 0
+#endif
 
 namespace spdlog {
 class logger;
@@ -34,6 +51,7 @@ const size_t ONE_GB        = 1 << 30;
 
 namespace memory {
 
+/// Types for the default memory manager
 typedef struct
 {
   bool manager_lock;
@@ -69,11 +87,132 @@ typedef struct memory_info
 
 } // namespace memory
 
-class MemoryManager
+// Global functions for setting a C af_memory_manager's internal ptrs
+int MemoryManagerCWrapper_getActiveDeviceId(af_memory_manager* impl_);
+
+int MemoryManagerCWrapper_getMaxMemorySize(af_memory_manager* impl_, int id);
+
+void* MemoryManagerCWrapper_nativeAlloc(af_memory_manager* impl_, size_t size);
+
+void MemoryManagerCWrapper_nativeFree(af_memory_manager* impl_, void* ptr);
+
+// Wrap a C af_memory_manager struct
+class MemoryManagerCWrapper : public af::MemoryManagerBase
 {
+    // A pointer to some memory manager
+    af_memory_manager* impl_;
     
+  public:
+    ~MemoryManagerCWrapper() {
+        // Like the C++ API, with the C API, the expectation is that
+        // we control the managers themselves once they're passed, so free them.
+        free(impl_);     
+    }
+  
+    explicit MemoryManagerCWrapper(af_memory_manager* manager) {
+      impl_ = manager;
+    }
+
+    void initialize() override {
+      impl_->wrapper_handle = (af_memory_manager*)this;
+
+      impl_->af_memory_manager_get_active_device_id =
+        MemoryManagerCWrapper_getActiveDeviceId;
+      impl_->af_memory_manager_get_max_memory_size =
+        MemoryManagerCWrapper_getMaxMemorySize;
+      impl_->af_memory_manager_native_alloc =
+        MemoryManagerCWrapper_nativeAlloc;
+      impl_->af_memory_manager_native_free =
+        MemoryManagerCWrapper_nativeFree;
+      
+      impl_->af_memory_manager_initialize(impl_);
+    }
+
+    void shutdown() override {
+      impl_->af_memory_manager_shutdown(impl_);
+    }
+
+    void setMaxMemorySize() override {
+      impl_->af_memory_manager_set_max_memory_size(impl_);
+    }
+    
+    void addMemoryManagement(int device) override {
+      impl_->af_memory_manager_add_memory_management(impl_, device);
+    }
+
+    void removeMemoryManagement(int device) override {
+      impl_->af_memory_manager_remove_memory_management(impl_, device);
+    }
+
+    void* alloc(const size_t size, bool user_lock) override {
+      return impl_->af_memory_manager_alloc(impl_, size, user_lock);
+    }
+
+    size_t allocated(void* ptr) override {
+      return impl_->af_memory_manager_allocated(impl_, ptr);
+    }
+
+    void unlock(void* ptr, bool user_unlock) override {
+      impl_->af_memory_manager_unlock(impl_, ptr, user_unlock);
+    }
+
+    void bufferInfo(size_t* alloc_bytes, size_t* alloc_buffers,
+                    size_t* lock_bytes, size_t* lock_buffers) override {
+      impl_->af_memory_manager_buffer_info(
+        impl_,
+        alloc_bytes,
+        alloc_buffers,
+        lock_bytes,
+        lock_buffers
+      );
+    }
+
+    void userLock(const void* ptr) override {
+      impl_->af_memory_manager_user_lock(impl_, ptr);
+    }
+
+    void userUnlock(const void* ptr) override {
+      impl_->af_memory_manager_user_unlock(impl_, ptr);
+    }
+
+    bool isUserLocked(const void* ptr) override {
+      return impl_->af_memory_manager_is_user_locked(impl_, ptr);
+    }
+
+    bool checkMemoryLimit() override {
+      return impl_->af_memory_manager_check_memory_limit(impl_);
+    }
+
+    size_t getMaxBytes() override {
+      return impl_->af_memory_manager_get_max_bytes(impl_);
+    }
+
+    unsigned getMaxBuffers() override {
+      return impl_->af_memory_manager_get_max_buffers(impl_);
+    }
+
+    void printInfo(const char* msg, const int device) override {
+      impl_->af_memory_manager_print_info(impl_, msg, device);
+    }
+
+    void garbageCollect() override {
+      impl_->af_memory_manager_garbage_collect(impl_);
+    }
+
+    size_t getMemStepSize() override {
+      return impl_->af_memory_manager_get_mem_step_size(impl_);
+    }
+
+    void setMemStepSize(size_t new_step_size) {
+      impl_->af_memory_manager_set_mem_step_size(impl_, new_step_size);
+    }
+};
+
+class MemoryManager : public af::MemoryManagerBase
+{
+
     using locked_iter = typename memory::locked_t::iterator;
-    
+
     using free_iter = memory::free_t::iterator;
 
     using uptr_t = std::unique_ptr<void, std::function<void(void*)>>;
@@ -83,23 +222,30 @@ class MemoryManager
     
     std::shared_ptr<spdlog::logger> logger;
     bool debug_mode;
+    mutex_t memory_mutex;
 
-    virtual common::memory::memory_info& getCurrentMemoryInfo() = 0;
-    virtual int getActiveDeviceId() = 0;
-    virtual size_t getMaxMemorySize(int id) = 0;
+    common::memory::memory_info& getCurrentMemoryInfo();
 
    public:
+    ~MemoryManager() = default;
+    MemoryManager() = default;
     MemoryManager(int num_devices, unsigned max_buffers, bool debug);
 
-    // Intended to be used with OpenCL backend, where
-    // users are allowed to add external devices(context, device pair)
-    // to the list of devices automatically detected by the library
-    void addMemoryManagement(int device);
+    // Initializes the memory manager
+    virtual void initialize() override;
+
+    // Shuts down the memory manager
+    virtual void shutdown() override;
 
     // Intended to be used with OpenCL backend, where
     // users are allowed to add external devices(context, device pair)
     // to the list of devices automatically detected by the library
-    void removeMemoryManagement(int device);
+    void addMemoryManagement(int device) override;
+
+    // Intended to be used with OpenCL backend, where
+    // users are allowed to add external devices(context, device pair)
+    // to the list of devices automatically detected by the library
+    void removeMemoryManagement(int device) override;
 
     void setMaxMemorySize();
 
@@ -109,18 +255,18 @@ class MemoryManager
     /// bytes. If there is already a free buffer available, it will use
     /// that buffer. Otherwise, it will allocate a new buffer using the
     /// nativeAlloc function.
-    void *alloc(const size_t size, bool user_lock);
+    void *alloc(const size_t size, bool user_lock) override;
 
     /// returns the size of the buffer at the pointer allocated by the memory
     /// manager.
-    size_t allocated(void *ptr);
+    size_t allocated(void *ptr) override;
 
     /// Frees or marks the pointer for deletion during the nex garbage
     /// collection event
-    void unlock(void *ptr, bool user_unlock);
+    void unlock(void *ptr, bool user_unlock) override;
 
     /// Frees all buffers which are not locked by the user or not being used.
-    virtual void garbageCollect() = 0;
+    void garbageCollect();
 
     void printInfo(const char *msg, const int device);
     void bufferInfo(size_t *alloc_bytes, size_t *alloc_buffers,
@@ -128,26 +274,20 @@ class MemoryManager
     void userLock(const void *ptr);
     void userUnlock(const void *ptr);
     bool isUserLocked(const void *ptr);
-    size_t getMemStepSize();
-    size_t getMaxBytes();
-    unsigned getMaxBuffers();
-    void setMemStepSize(size_t new_step_size);
-    virtual void *nativeAlloc(const size_t bytes) = 0;
-    virtual void nativeFree(void *ptr) = 0;
+    size_t getMemStepSize() override;
+    size_t getMaxBytes() override;
+    unsigned getMaxBuffers() override;
+    void setMemStepSize(size_t new_step_size) override;
     bool checkMemoryLimit();
 
    protected:
-    spdlog::logger *getLogger();
-    MemoryManager()                            = delete;
-    ~MemoryManager()                           = default;
-    MemoryManager(const MemoryManager &other)  = delete;
-    MemoryManager(const MemoryManager &&other) = delete;
-    MemoryManager &operator=(const MemoryManager &other) = delete;
-    MemoryManager &operator=(const MemoryManager &&other) = delete;
-    mutex_t memory_mutex;
-    // backend-specific
+    MemoryManager(const MemoryManager& other) = delete;
+    MemoryManager(const MemoryManager&& other) = delete;
+    MemoryManager& operator=(const MemoryManager& other) = delete;
+    MemoryManager& operator=(const MemoryManager&& other) = delete;
+
     std::vector<common::memory::memory_info> memory;
-    // backend-agnostic
+
     void cleanDeviceMemoryManager(int device);
 };
 

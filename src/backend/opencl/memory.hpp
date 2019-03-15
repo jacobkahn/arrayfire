@@ -50,6 +50,7 @@ unsigned getMaxBuffers();
 
 void deviceMemoryInfo(size_t *alloc_bytes, size_t *alloc_buffers,
                       size_t *lock_bytes, size_t *lock_buffers);
+void shutdownMemoryManager();
 void garbageCollect();
 void pinnedGarbageCollect();
 
@@ -59,30 +60,26 @@ void setMemStepSize(size_t step_bytes);
 size_t getMemStepSize(void);
 bool checkMemoryLimit();
 
-class MemoryManager : public common::MemoryManager
+class MemoryManager : public af::BackendMemoryManager
 {
     public:
         MemoryManager();
         ~MemoryManager();
         int getActiveDeviceId() override;
         size_t getMaxMemorySize(int id) override;
-        void *nativeAlloc(const size_t bytes);
-        void nativeFree(void *ptr);
-        common::memory::memory_info& getCurrentMemoryInfo();
-        void garbageCollect() override;
+        void *nativeAlloc(const size_t bytes) override;
+        void nativeFree(void *ptr) override;
 };
 
-class MemoryManagerPinned : public common::MemoryManager
+class MemoryManagerPinned : public af::BackendMemoryManager
 {
     public:
         MemoryManagerPinned();
         ~MemoryManagerPinned();
         int getActiveDeviceId() override;
         size_t getMaxMemorySize(int id) override;
-        void *nativeAlloc(const size_t bytes);
-        void nativeFree(void *ptr);
-        common::memory::memory_info& getCurrentMemoryInfo();
-        void garbageCollect() override;
+        void *nativeAlloc(const size_t bytes) override;
+        void nativeFree(void *ptr) override;
     private:
         std::vector< std::map<void *, cl::Buffer*> > pinnedMaps;
 };

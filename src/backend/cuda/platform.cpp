@@ -352,27 +352,76 @@ DeviceManager &DeviceManager::getInstance() {
     return *my_instance;
 }
 
-MemoryManager &memoryManager() {
+af::MemoryManagerBase& memoryManager()
+{
     static std::once_flag flag;
 
-    DeviceManager &inst = DeviceManager::getInstance();
-
-    std::call_once(flag, [&]() { inst.memManager.reset(new MemoryManager()); });
+    DeviceManager& inst = DeviceManager::getInstance();
+    std::call_once(flag, [&]() {
+        // By default, create an instance of the default memory manager
+        inst.memManager.reset(new common::MemoryManager(
+                              getDeviceCount(),
+                              common::MAX_BUFFERS,
+                              AF_MEM_DEBUG || AF_CUDA_MEM_DEBUG));
+        // Set the memory manager's device memory manager
+        std::unique_ptr<cuda::MemoryManager> deviceMemoryManager;
+        deviceMemoryManager.reset(new cuda::MemoryManager());
+        inst.memManager->setBackendManager(std::move(deviceMemoryManager));
+        inst.memManager->initialize();
+    });
 
     return *(inst.memManager.get());
 }
 
-MemoryManagerPinned &pinnedMemoryManager() {
+af::MemoryManagerBase& pinnedMemoryManager()
+{
     static std::once_flag flag;
 
     DeviceManager &inst = DeviceManager::getInstance();
-
     std::call_once(flag, [&]() {
-        inst.pinnedMemManager.reset(new MemoryManagerPinned());
+        // By default, create an instance of the default memory manager
+        inst.pinnedMemManager.reset(new common::MemoryManager(
+                              getDeviceCount(),
+                              common::MAX_BUFFERS,
+                              AF_MEM_DEBUG || AF_CUDA_MEM_DEBUG));
+        // Set the memory manager's device memory manager
+        std::unique_ptr<cuda::MemoryManager> deviceMemoryManager;
+        deviceMemoryManager.reset(new cuda::MemoryManager());
+        inst.pinnedMemManager->setBackendManager(std::move(deviceMemoryManager));
+        inst.pinnedMemManager->initialize();
     });
 
     return *(inst.pinnedMemManager.get());
 }
+
+void setMemoryManagerDevice(std::unique_ptr<af::MemoryManagerBase> ptr) {
+    // Get the current memory manager to fix the edge case in which we haven't
+    // created the default memory manager which will cause deadlock.
+    memoryManager();
+
+    DeviceManager& inst = DeviceManager::getInstance();
+    inst.memManager = std::move(ptr);
+    // Set the memory manager's device memory manager
+    std::unique_ptr<cuda::MemoryManager> deviceMemoryManager;
+    deviceMemoryManager.reset(new cuda::MemoryManager());
+    inst.memManager->setBackendManager(std::move(deviceMemoryManager));
+    inst.memManager->initialize();
+}
+
+void setPinnedMemoryManagerDevice(std::unique_ptr<af::MemoryManagerBase> ptr) {
+    // Get the current pinned memory manager to fix the edge case in which
+    // we haven'tcreated the default memory manager which will cause deadlock.
+    memoryManager();
+
+    DeviceManager& inst = DeviceManager::getInstance();
+    inst.pinnedMemManager = std::move(ptr);
+    // Set the memory manager's device memory manager
+    std::unique_ptr<cuda::MemoryManagerPinned> deviceMemoryManager;
+    deviceMemoryManager.reset(new cuda::MemoryManagerPinned());
+    inst.pinnedMemManager->setBackendManager(std::move(deviceMemoryManager));
+    inst.pinnedMemManager->initialize();
+}
+
 
 graphics::ForgeManager &forgeManager() {
     return *(DeviceManager::getInstance().fgMngr);

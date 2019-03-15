@@ -11,6 +11,7 @@
 #include <af/backend.h>
 #include <af/compatible.h>
 #include <af/device.h>
+#include <af/memory.h>
 #include <af/traits.hpp>
 #include "error.hpp"
 #include "type_util.hpp"
@@ -95,6 +96,14 @@ int deviceget() { return getDevice(); }
 void sync(int device) { AF_THROW(af_sync(device)); }
 
 ///////////////////////////////////////////////////////////////////////////
+void setMemoryManager(af_memory_manager* ptr) {
+  AF_THROW(af_set_memory_manager(ptr, AF_CPP_MEMORY_MANAGER_API));
+}
+
+void setPinnedMemoryManager(af_memory_manager* ptr) {
+  AF_THROW(af_set_pinned_memory_manager(ptr, AF_CPP_MEMORY_MANAGER_API));
+}
+
 // Alloc and free host, pinned, zero copy
 void *alloc(const size_t elements, const af::dtype type) {
     void *ptr;

@@ -112,7 +112,12 @@ void sync(int device);
 
 bool& evalFlag();
 
-MemoryManager& memoryManager();
+af::MemoryManagerBase& memoryManager();
+
+void setMemoryManagerDevice(std::unique_ptr<af::MemoryManagerBase> ptr);
+
+// (calls setMemoryManagerDevice)
+void setPinnedMemoryManagerDevice(std::unique_ptr<af::MemoryManagerBase> ptr);
 
 graphics::ForgeManager& forgeManager();
 
@@ -126,8 +131,12 @@ class DeviceManager {
     static DeviceManager& getInstance();
 
     friend queue& getQueue(int device);
+  
+    friend af::MemoryManagerBase& memoryManager();
 
-    friend MemoryManager& memoryManager();
+    friend void setMemoryManagerDevice(
+        std::unique_ptr<af::MemoryManagerBase> ptr
+    );
 
     friend graphics::ForgeManager& forgeManager();
 
@@ -144,7 +153,7 @@ class DeviceManager {
 
     // Attributes
     std::vector<queue> queues;
-    std::unique_ptr<MemoryManager> memManager;
+    std::unique_ptr<af::MemoryManagerBase> memManager;
     std::unique_ptr<graphics::ForgeManager> fgMngr;
     const CPUInfo cinfo;
 };

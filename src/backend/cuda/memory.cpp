@@ -23,14 +23,6 @@
 
 #include <mutex>
 
-#ifndef AF_MEM_DEBUG
-#define AF_MEM_DEBUG 0
-#endif
-
-#ifndef AF_CUDA_MEM_DEBUG
-#define AF_CUDA_MEM_DEBUG 0
-#endif
-
 using common::bytesToString;
 
 using std::function;
@@ -51,7 +43,13 @@ unsigned getMaxBuffers() { return memoryManager().getMaxBuffers(); }
 
 void garbageCollect() { memoryManager().garbageCollect(); }
 
-void printMemInfo(const char *msg, const int device) {
+void shutdownMemoryManager()
+{
+    memoryManager().shutdown();
+}
+
+void printMemInfo(const char *msg, const int device)
+{
     memoryManager().printInfo(msg, device);
 }
 
@@ -117,33 +115,25 @@ INSTANTIATE(uintl)
 INSTANTIATE(short)
 INSTANTIATE(ushort)
 
-MemoryManager::MemoryManager()
-    : common::MemoryManager(getDeviceCount(), common::MAX_BUFFERS,
-                                                 AF_MEM_DEBUG || AF_CUDA_MEM_DEBUG)
-{
-    this->setMaxMemorySize();
+MemoryManager::MemoryManager() {
+  logger = common::loggerFactory("mem");
 }
 
 MemoryManager::~MemoryManager() {
     for (int n = 0; n < cuda::getDeviceCount(); n++) {
         try {
             cuda::setDevice(n);
-            garbageCollect();
-        } catch (AfError err) {
-            continue;  // Do not throw any errors while shutting down
+            shutdownMemoryManager();
+        } catch(AfError err) {
+            continue; // Do not throw any errors while shutting down
         }
     }
 }
 
-void MemoryManager::garbageCollect() {
-    cleanDeviceMemoryManager(this->getActiveDeviceId());
+int MemoryManager::getActiveDeviceId()
+{
+    return cuda::getActiveDeviceId();
 }
-
-common::memory::memory_info& MemoryManager::getCurrentMemoryInfo() {
-    return memory[this->getActiveDeviceId()];
-}
-
-int MemoryManager::getActiveDeviceId() { return cuda::getActiveDeviceId(); }
 
 size_t MemoryManager::getMaxMemorySize(int id) {
     return cuda::getDeviceMemorySize(id);
@@ -162,28 +152,19 @@ void MemoryManager::nativeFree(void *ptr) {
     if (err != cudaErrorCudartUnloading) { CUDA_CHECK(err); }
 }
 
-MemoryManagerPinned::MemoryManagerPinned()
-    : common::MemoryManager(1, common::MAX_BUFFERS,
-                                                 AF_MEM_DEBUG || AF_CUDA_MEM_DEBUG)
-{
-    this->setMaxMemorySize();
+MemoryManagerPinned::MemoryManagerPinned() {
+  logger = common::loggerFactory("mem");
 }
 
 MemoryManagerPinned::~MemoryManagerPinned() { garbageCollect(); }
 
-int MemoryManagerPinned::getActiveDeviceId() {
-    return 0;  // pinned uses a single vector
-
-void MemoryManagerPinned::garbageCollect() {
-    cleanDeviceMemoryManager(this->getActiveDeviceId());
+int MemoryManagerPinned::getActiveDeviceId()
+{
+    return 0; // pinned uses a single vector
 }
 
-common::memory::memory_info& MemoryManagerPinned::getCurrentMemoryInfo() {
-    return memory[this->getActiveDeviceId()];
-}
-
-size_t MemoryManagerPinned::getMaxMemorySize(int id) {
-    UNUSED(id);
+size_t MemoryManagerPinned::getMaxMemorySize(int id)
+{
     return cuda::getHostMemorySize();
 }
 
