@@ -31,7 +31,7 @@ void MemoryManager::cleanDeviceMemoryManager(int device) {
     // the lock is being held becasue the CPU backend calls sync.
     vector<void*> free_ptrs;
     size_t bytes_freed = 0;
-    memory::memory_info& current = memory[device];
+    memory_info& current = memory[device];
     {
         lock_guard_t lock(this->memory_mutex);
         // Return if all buffers are locked
@@ -122,7 +122,7 @@ void MemoryManager::setMaxMemorySize() {
     }
 }
 
-common::memory::memory_info& MemoryManager::getCurrentMemoryInfo() {
+MemoryManager::memory_info& MemoryManager::getCurrentMemoryInfo() {
     return memory[this->getActiveDeviceId()];
 }
 
@@ -133,8 +133,8 @@ void *MemoryManager::alloc(const size_t bytes, bool user_lock) {
                           (divup(bytes, mem_step_size) * mem_step_size);
 
     if (bytes > 0) {
-        memory::memory_info& current = this->getCurrentMemoryInfo();
-        memory::locked_info info = {!user_lock, user_lock, alloc_bytes};
+        memory_info& current = this->getCurrentMemoryInfo();
+        locked_info info = {!user_lock, user_lock, alloc_bytes};
 
         // There is no memory cache in debug mode
         if (!this->debug_mode) {
@@ -181,7 +181,7 @@ void *MemoryManager::alloc(const size_t bytes, bool user_lock) {
 
 size_t MemoryManager::allocated(void *ptr) {
     if (!ptr) return 0;
-    memory::memory_info& current = this->getCurrentMemoryInfo();
+    memory_info& current = this->getCurrentMemoryInfo();
     locked_iter iter = current.locked_map.find((void *)ptr);
     if (iter == current.locked_map.end()) return 0;
     return (iter->second).bytes;
@@ -196,7 +196,7 @@ void MemoryManager::unlock(void *ptr, bool user_unlock) {
     uptr_t freed_ptr(nullptr, [this](void *p) { this->nativeFree(p); });
     {
         lock_guard_t lock(this->memory_mutex);
-        memory::memory_info& current = this->getCurrentMemoryInfo();
+        memory_info& current = this->getCurrentMemoryInfo();
 
         locked_iter iter = current.locked_map.find((void *)ptr);
 
@@ -236,7 +236,7 @@ void MemoryManager::unlock(void *ptr, bool user_unlock) {
 
 
 void MemoryManager::printInfo(const char *msg, const int device) {
-    const memory::memory_info& current = this->getCurrentMemoryInfo();
+    const memory_info& current = this->getCurrentMemoryInfo();
 
     printf("%s\n", msg);
     printf(
@@ -286,7 +286,7 @@ void MemoryManager::printInfo(const char *msg, const int device) {
 
 void MemoryManager::bufferInfo(size_t *alloc_bytes, size_t *alloc_buffers,
                                   size_t *lock_bytes,  size_t *lock_buffers) {
-    const memory::memory_info& current = this->getCurrentMemoryInfo();
+    const memory_info& current = this->getCurrentMemoryInfo();
     lock_guard_t lock(this->memory_mutex);
     if (alloc_bytes) *alloc_bytes = current.total_bytes;
     if (alloc_buffers) *alloc_buffers = current.total_buffers;
@@ -295,7 +295,7 @@ void MemoryManager::bufferInfo(size_t *alloc_bytes, size_t *alloc_buffers,
 }
 
 void MemoryManager::userLock(const void *ptr) {
-    memory::memory_info& current = this->getCurrentMemoryInfo();
+    memory_info& current = this->getCurrentMemoryInfo();
 
     lock_guard_t lock(this->memory_mutex);
 
@@ -303,7 +303,7 @@ void MemoryManager::userLock(const void *ptr) {
     if (iter != current.locked_map.end()) {
         iter->second.user_lock = true;
     } else {
-        memory::locked_info info = {false,
+        locked_info info = {false,
             true,
             100}; //This number is not relevant
 
@@ -317,7 +317,7 @@ void MemoryManager::userUnlock(const void *ptr) {
 }
 
 bool MemoryManager::isUserLocked(const void *ptr) {
-    memory::memory_info& current = this->getCurrentMemoryInfo();
+    memory_info& current = this->getCurrentMemoryInfo();
     lock_guard_t lock(this->memory_mutex);
     locked_iter iter = current.locked_map.find(const_cast<void *>(ptr));
     if (iter != current.locked_map.end()) {
@@ -350,7 +350,7 @@ void MemoryManager::setMemStepSize(size_t new_step_size) {
 }
 
 bool MemoryManager::checkMemoryLimit() {
-    const memory::memory_info& current = this->getCurrentMemoryInfo();
+    const memory_info& current = this->getCurrentMemoryInfo();
     return current.lock_bytes >= current.max_bytes ||
            current.total_buffers >= this->max_buffers;
 }

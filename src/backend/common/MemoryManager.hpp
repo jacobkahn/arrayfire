@@ -49,44 +49,6 @@ using lock_guard_t = std::lock_guard<mutex_t>;
 const unsigned MAX_BUFFERS = 1000;
 const size_t ONE_GB        = 1 << 30;
 
-namespace memory {
-
-/// Types for the default memory manager
-typedef struct
-{
-  bool manager_lock;
-  bool user_lock;
-  size_t bytes;
-} locked_info;
-
-using locked_t    = typename std::unordered_map<void *, locked_info>;
-using free_t    = std::unordered_map<size_t, std::vector<void *> >;
-
-typedef struct memory_info
-{
-  locked_t locked_map;
-  free_t   free_map;
-
-  size_t lock_bytes;
-  size_t lock_buffers;
-  size_t total_bytes;
-  size_t total_buffers;
-  size_t max_bytes;
-
-  memory_info()
-  {
-    // Calling getMaxMemorySize() here calls the virtual function that returns 0
-    // Call it from outside the constructor.
-    max_bytes     = ONE_GB;
-    total_bytes   = 0;
-    total_buffers = 0;
-    lock_bytes    = 0;
-    lock_buffers  = 0;
-  }
-} memory_info;
-
-} // namespace memory
-
 // Global functions for setting a C af_memory_manager's internal ptrs
 int MemoryManagerCWrapper_getActiveDeviceId(af_memory_manager* impl_);
 
@@ -130,10 +92,6 @@ class MemoryManagerCWrapper : public af::MemoryManagerBase
 
     void shutdown() override {
       impl_->af_memory_manager_shutdown(impl_);
-    }
-
-    void setMaxMemorySize() override {
-      impl_->af_memory_manager_set_max_memory_size(impl_);
     }
     
     void addMemoryManagement(int device) override {
@@ -208,14 +166,45 @@ class MemoryManagerCWrapper : public af::MemoryManagerBase
     }
 };
 
+/**
+ * The default ArrayFire memory manager.
+ */
 class MemoryManager : public af::MemoryManagerBase
 {
+    typedef struct {
+        bool manager_lock;
+        bool user_lock;
+        size_t bytes;
+    } locked_info;
 
-    using locked_iter = typename memory::locked_t::iterator;
+    using locked_t    = typename std::unordered_map<void *, locked_info>;
+    using locked_iter = typename locked_t::iterator;
 
-    using free_iter = memory::free_t::iterator;
+    using free_t    = std::unordered_map<size_t, std::vector<void *>>;
+    using free_iter = free_t::iterator;
 
-    using uptr_t = std::unique_ptr<void, std::function<void(void*)>>;
+    using uptr_t = std::unique_ptr<void, std::function<void(void *)>>;
+
+    typedef struct memory_info {
+        locked_t locked_map;
+        free_t free_map;
+
+        size_t lock_bytes;
+        size_t lock_buffers;
+        size_t total_bytes;
+        size_t total_buffers;
+        size_t max_bytes;
+
+        memory_info() {
+            // Calling getMaxMemorySize() here calls the virtual function that
+            // returns 0 Call it from outside the constructor.
+            max_bytes     = ONE_GB;
+            total_bytes   = 0;
+            total_buffers = 0;
+            lock_bytes    = 0;
+            lock_buffers  = 0;
+        }
+    } memory_info;
 
     size_t mem_step_size;
     unsigned max_buffers;
@@ -224,7 +213,7 @@ class MemoryManager : public af::MemoryManagerBase
     bool debug_mode;
     mutex_t memory_mutex;
 
-    common::memory::memory_info& getCurrentMemoryInfo();
+    memory_info& getCurrentMemoryInfo();
 
    public:
     ~MemoryManager() = default;
@@ -286,7 +275,7 @@ class MemoryManager : public af::MemoryManagerBase
     MemoryManager& operator=(const MemoryManager& other) = delete;
     MemoryManager& operator=(const MemoryManager&& other) = delete;
 
-    std::vector<common::memory::memory_info> memory;
+    std::vector<memory_info> memory;
 
     void cleanDeviceMemoryManager(int device);
 };
