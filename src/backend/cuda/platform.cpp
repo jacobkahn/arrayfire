@@ -385,8 +385,8 @@ af::MemoryManagerBase& pinnedMemoryManager()
                               common::MAX_BUFFERS,
                               AF_MEM_DEBUG || AF_CUDA_MEM_DEBUG));
         // Set the memory manager's device memory manager
-        std::unique_ptr<cuda::MemoryManager> deviceMemoryManager;
-        deviceMemoryManager.reset(new cuda::MemoryManager());
+        std::unique_ptr<cuda::MemoryManagerPinned> deviceMemoryManager;
+        deviceMemoryManager.reset(new cuda::MemoryManagerPinned());
         inst.pinnedMemManager->setBackendManager(std::move(deviceMemoryManager));
         inst.pinnedMemManager->initialize();
     });

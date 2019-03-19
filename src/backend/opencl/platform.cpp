@@ -700,8 +700,8 @@ af::MemoryManagerBase& pinnedMemoryManager()
                               common::MAX_BUFFERS,
                               AF_MEM_DEBUG || AF_OPENCL_MEM_DEBUG));
         // Set the memory manager's device memory manager
-        std::unique_ptr<opencl::MemoryManager> deviceMemoryManager;
-        deviceMemoryManager.reset(new opencl::MemoryManager());
+        std::unique_ptr<opencl::MemoryManagerPinned> deviceMemoryManager;
+        deviceMemoryManager.reset(new opencl::MemoryManagerPinned());
         inst.pinnedMemManager->setBackendManager(std::move(deviceMemoryManager));
         inst.pinnedMemManager->initialize();
       });
