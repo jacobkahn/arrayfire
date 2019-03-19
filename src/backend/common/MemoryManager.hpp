@@ -161,7 +161,7 @@ class MemoryManagerCWrapper : public af::MemoryManagerBase
       return impl_->af_memory_manager_get_mem_step_size(impl_);
     }
 
-    void setMemStepSize(size_t new_step_size) {
+    void setMemStepSize(size_t new_step_size) override {
       impl_->af_memory_manager_set_mem_step_size(impl_, new_step_size);
     }
 };
@@ -255,19 +255,19 @@ class MemoryManager : public af::MemoryManagerBase
     void unlock(void *ptr, bool user_unlock) override;
 
     /// Frees all buffers which are not locked by the user or not being used.
-    void garbageCollect();
+    void garbageCollect() override;
 
-    void printInfo(const char *msg, const int device);
+    void printInfo(const char *msg, const int device) override;
     void bufferInfo(size_t *alloc_bytes, size_t *alloc_buffers,
-                    size_t *lock_bytes, size_t *lock_buffers);
-    void userLock(const void *ptr);
-    void userUnlock(const void *ptr);
-    bool isUserLocked(const void *ptr);
+                    size_t *lock_bytes, size_t *lock_buffers) override;
+    void userLock(const void *ptr) override;
+    void userUnlock(const void *ptr) override;
+    bool isUserLocked(const void *ptr) override;
     size_t getMemStepSize() override;
     size_t getMaxBytes() override;
     unsigned getMaxBuffers() override;
     void setMemStepSize(size_t new_step_size) override;
-    bool checkMemoryLimit();
+    bool checkMemoryLimit() override;
 
    protected:
     MemoryManager(const MemoryManager& other) = delete;

@@ -105,15 +105,15 @@ public:
   }
 
   void bufferInfo(size_t *alloc_bytes, size_t *alloc_buffers,
-                  size_t *lock_bytes,  size_t *lock_buffers) {
+                  size_t *lock_bytes,  size_t *lock_buffers) override {
     *alloc_bytes = allocatedBytes_;
     *alloc_buffers = cache_.size();
   }
 
   // noops since we're ignoring locked memory in this implementation
-  void userLock(const void *ptr) {}
-  void userUnlock(const void *ptr) {}
-  bool isUserLocked(const void *ptr) {}
+  void userLock(const void *ptr) override {}
+  void userUnlock(const void *ptr) override {}
+  bool isUserLocked(const void *ptr) override { return false; }
 
   bool checkMemoryLimit() override
   {
@@ -131,7 +131,7 @@ public:
     return maxBuffers_;
   }
 
-  void printInfo(const char *msg, const int device) {
+  void printInfo(const char *msg, const int device) override {
     std::printf("%s\n", msg);
     std::printf("Bytes allocated: %zu | buffers allocated: %zu\n",
                 allocatedBytes_,
