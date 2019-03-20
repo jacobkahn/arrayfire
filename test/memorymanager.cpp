@@ -98,10 +98,12 @@ public:
 
   void unlock(void *ptr, bool user_unlock) override
   {
-    auto size = cache_[ptr];
-    cache_.erase(ptr);
-    nativeFree(ptr);
-    allocatedBytes_ -= size;
+    if (cache_.find(ptr) != cache_.end()) {
+      auto size = cache_[ptr];
+      cache_.erase(ptr);
+      nativeFree(ptr);
+      allocatedBytes_ -= size;
+    }
   }
 
   void bufferInfo(size_t *alloc_bytes, size_t *alloc_buffers,

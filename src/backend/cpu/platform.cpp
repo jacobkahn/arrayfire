@@ -247,22 +247,26 @@ bool& evalFlag() {
 
 DeviceManager::DeviceManager()
   : queues(MAX_QUEUES),
-    // By default, create an instance of the default memory manager
-    memManager(new common::MemoryManager(getDeviceCount(), common::MAX_BUFFERS,
-                                         AF_MEM_DEBUG || AF_CPU_MEM_DEBUG)),
-    fgMngr(new graphics::ForgeManager())
-{
-  // Set the memory manager's device memory manager
-  std::unique_ptr<cpu::MemoryManager> deviceMemoryManager;
-  deviceMemoryManager.reset(new cpu::MemoryManager());
-  memManager->setBackendManager(std::move(deviceMemoryManager));
-  memManager->initialize();
-
-}
+    fgMngr(new graphics::ForgeManager()) {}
 
 af::MemoryManagerBase& memoryManager()
 {
+    static std::once_flag flag;
+
     DeviceManager& inst = DeviceManager::getInstance();
+    std::call_once(flag, [&]() {
+        // By default, create an instance of the default memory manager
+        inst.memManager.reset(new common::MemoryManager(
+                          getDeviceCount(),
+                          common::MAX_BUFFERS,
+                          AF_MEM_DEBUG || AF_CPU_MEM_DEBUG));
+        // Set the memory manager's device memory manager
+        std::unique_ptr<cpu::MemoryManager> deviceMemoryManager;
+        deviceMemoryManager.reset(new cpu::MemoryManager());
+        inst.memManager->setBackendManager(std::move(deviceMemoryManager));
+        inst.memManager->initialize();
+      });
+
     return *(inst.memManager);
 }
 
